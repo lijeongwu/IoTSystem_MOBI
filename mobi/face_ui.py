@@ -106,9 +106,17 @@ class FaceUI:
         pygame.draw.ellipse(self.screen, color, rect)
 
         if not blink:
-            pupil = pygame.Rect(0, 0, 34, 44)
-            pupil.center = (x + pupil_offset, y + 3)
-            pygame.draw.ellipse(self.screen, (20, 24, 28), pupil)
+            iris = pygame.Rect(0, 0, 46, 58)
+            iris.center = (x + pupil_offset, y + 3)
+            pygame.draw.ellipse(self.screen, (80, 156, 130), iris)
+
+            highlight = pygame.Rect(0, 0, 12, 16)
+            highlight.center = (x + pupil_offset - 9, y - 15)
+            pygame.draw.ellipse(self.screen, (210, 255, 236), highlight)
+
+            slit = pygame.Rect(0, 0, 9, 55)
+            slit.center = (x + pupil_offset, y + 3)
+            pygame.draw.ellipse(self.screen, (12, 16, 18), slit)
 
     def _draw_sleep_eye(self, x: int, y: int) -> None:
         pygame.draw.arc(self.screen, (210, 225, 235), (x - 62, y - 24, 124, 64), 0.15, math.pi - 0.15, 8)
@@ -141,4 +149,3 @@ class FaceUI:
         text = self.font.render(state.message, True, (180, 190, 200))
         rect = text.get_rect(center=(self.config.width // 2, self.config.height - 38))
         self.screen.blit(text, rect)
-

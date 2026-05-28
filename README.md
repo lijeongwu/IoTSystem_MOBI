@@ -103,6 +103,20 @@ python run_mobi.py
 python run_mobi.py --camera-index 1
 ```
 
+얼굴 인식 여부는 콘솔 로그로 확인할 수 있습니다.
+
+```text
+face detected: 얼굴을 처음 찾음
+face tracking: 얼굴 위치와 서보 각도 추적 중
+face lost: 얼굴을 놓침
+```
+
+더 자세히 보고 싶으면:
+
+```bash
+python run_mobi.py --log-level DEBUG
+```
+
 ## 키보드 테스트
 
 실행 중 키보드로 상태를 강제로 테스트할 수 있습니다.
@@ -126,4 +140,3 @@ Esc / Q: 종료
 5. TTP224 터치 반응 연결
 6. MPU6050 흔들림 반응 연결
 7. 음성 입출력 추가
-

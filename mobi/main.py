@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import time
 
 import pygame
@@ -24,6 +25,7 @@ def build_config(args: argparse.Namespace) -> RobotConfig:
 
 class MobiApp:
     def __init__(self, config: RobotConfig):
+        self.logger = logging.getLogger("mobi")
         self.config = config
         self.ui = FaceUI(config.display)
         self.vision = Vision(config.vision, mock=config.mock)
@@ -36,6 +38,7 @@ class MobiApp:
         self.message = "mock mode" if config.mock else "ready"
         self._mood_until = 0.0
         self._last_face_seen = False
+        self._last_tracking_log_at = 0.0
 
     def run(self) -> None:
         try:
@@ -89,6 +92,21 @@ class MobiApp:
 
         if detection.seen and not self._last_face_seen:
             self._set_mood("happy", "face detected", duration=0.9)
+            self.logger.info(
+                "face detected: x=%s y=%s size=%sx%s",
+                detection.x,
+                detection.y,
+                detection.w,
+                detection.h,
+            )
+        elif not detection.seen and self._last_face_seen:
+            self.logger.info("face lost")
+
+        now = time.monotonic()
+        if detection.seen and now - self._last_tracking_log_at > 1.0:
+            self.logger.info("face tracking: x=%s servo_angle=%.1f", detection.x, self.servo.angle)
+            self._last_tracking_log_at = now
+
         self._last_face_seen = detection.seen
 
         mood = self.mood
@@ -123,12 +141,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mock", action="store_true", help="Run without real GPIO/I2C/camera hardware.")
     parser.add_argument("--camera-index", type=int, default=0, help="OpenCV camera index.")
     parser.add_argument("--audio", action="store_true", help="Enable pyttsx3 text-to-speech.")
+    parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    logging.basicConfig(
+        level=getattr(logging, args.log_level),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
     config = build_config(args)
     app = MobiApp(config)
     app.run()
-
