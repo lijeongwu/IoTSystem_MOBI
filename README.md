@@ -75,6 +75,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+YOLO 인식을 사용할 경우:
+
+```bash
+pip install -r requirements-yolo.txt
+```
+
 I2C도 켜야 합니다.
 
 ```bash
@@ -95,6 +101,18 @@ python run_mobi.py --mock
 
 ```bash
 python run_mobi.py
+```
+
+YOLO로 사람 또는 커스텀 얼굴 모델을 인식하려면:
+
+```bash
+python run_mobi.py --vision-backend yolo
+```
+
+별도 YOLO 얼굴 모델 파일을 사용할 때:
+
+```bash
+python run_mobi.py --vision-backend yolo --yolo-model models/face.pt
 ```
 
 카메라 번호가 다르면:

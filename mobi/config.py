@@ -21,6 +21,10 @@ class VisionConfig:
     height: int = 240
     detect_every_n_frames: int = 2
     lost_after_s: float = 1.5
+    backend: str = "haar"
+    yolo_model: str = "yolov8n.pt"
+    yolo_confidence: float = 0.45
+    yolo_target_classes: tuple[str, ...] = ("person", "face")
 
 
 @dataclass(frozen=True)
@@ -57,4 +61,3 @@ class RobotConfig:
     touch: TouchConfig = field(default_factory=TouchConfig)
     imu: ImuConfig = field(default_factory=ImuConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
-

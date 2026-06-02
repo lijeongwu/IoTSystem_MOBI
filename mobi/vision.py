@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import math
 from dataclasses import dataclass
+from typing import Any
 
 import cv2
 
@@ -29,12 +30,39 @@ class Vision:
         self._last_seen_at = 0.0
         self._cap = None
         self._picamera2 = None
+        self._yolo = None
 
-        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        self._face_cascade = cv2.CascadeClassifier(cascade_path)
+        self._face_cascade = None
+        if config.backend == "haar":
+            self._setup_haar()
+        elif config.backend == "yolo":
+            self._setup_yolo()
+        else:
+            raise ValueError(f"Unsupported vision backend: {config.backend}")
 
         if not mock:
             self._setup_camera()
+
+    def _setup_haar(self) -> None:
+        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        self._face_cascade = cv2.CascadeClassifier(cascade_path)
+
+    def _setup_yolo(self) -> None:
+        try:
+            from ultralytics import YOLO
+
+            self._yolo = YOLO(self.config.yolo_model)
+        except Exception as exc:
+            print(f"[vision] YOLO unavailable, falling back to Haar Cascade: {exc}")
+            self.config = VisionConfig(
+                camera_index=self.config.camera_index,
+                width=self.config.width,
+                height=self.config.height,
+                detect_every_n_frames=self.config.detect_every_n_frames,
+                lost_after_s=self.config.lost_after_s,
+                backend="haar",
+            )
+            self._setup_haar()
 
     def _setup_camera(self) -> None:
         self._cap = cv2.VideoCapture(self.config.camera_index)
@@ -75,13 +103,61 @@ class Vision:
         if self._frame_count % self.config.detect_every_n_frames != 0:
             return self._mark_lost_if_needed()
 
+        if self.config.backend == "yolo":
+            return self._detect_with_yolo(frame)
+        return self._detect_with_haar(frame)
+
+    def _detect_with_haar(self, frame) -> FaceDetection:
+        if self._face_cascade is None:
+            return self._mark_lost_if_needed()
+
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = self._face_cascade.detectMultiScale(gray, scaleFactor=1.15, minNeighbors=5, minSize=(45, 45))
-
         if len(faces) == 0:
             return self._mark_lost_if_needed()
 
         x, y, w, h = max(faces, key=lambda box: box[2] * box[3])
+        return self._save_detection(x, y, w, h)
+
+    def _detect_with_yolo(self, frame) -> FaceDetection:
+        if self._yolo is None:
+            return self._mark_lost_if_needed()
+
+        results = self._yolo.predict(frame, conf=self.config.yolo_confidence, verbose=False)
+        if not results:
+            return self._mark_lost_if_needed()
+
+        result = results[0]
+        names = getattr(result, "names", None) or getattr(self._yolo, "names", {})
+        best_box = None
+        best_area = 0.0
+
+        for box in getattr(result, "boxes", []):
+            class_id = int(box.cls[0])
+            class_name = self._class_name(names, class_id)
+            if class_name not in self.config.yolo_target_classes:
+                continue
+
+            x1, y1, x2, y2 = [float(value) for value in box.xyxy[0]]
+            area = (x2 - x1) * (y2 - y1)
+            if area > best_area:
+                best_area = area
+                best_box = (x1, y1, x2, y2)
+
+        if best_box is None:
+            return self._mark_lost_if_needed()
+
+        x1, y1, x2, y2 = best_box
+        return self._save_detection(int(x1), int(y1), int(x2 - x1), int(y2 - y1))
+
+    def _class_name(self, names: Any, class_id: int) -> str:
+        if isinstance(names, dict):
+            return str(names.get(class_id, class_id))
+        if isinstance(names, list) and 0 <= class_id < len(names):
+            return str(names[class_id])
+        return str(class_id)
+
+    def _save_detection(self, x: int, y: int, w: int, h: int) -> FaceDetection:
         detection = FaceDetection(
             x=int(x + w / 2),
             y=int(y + h / 2),

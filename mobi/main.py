@@ -18,7 +18,12 @@ from .vision import Vision
 def build_config(args: argparse.Namespace) -> RobotConfig:
     return RobotConfig(
         mock=args.mock,
-        vision=VisionConfig(camera_index=args.camera_index),
+        vision=VisionConfig(
+            camera_index=args.camera_index,
+            backend=args.vision_backend,
+            yolo_model=args.yolo_model,
+            yolo_confidence=args.yolo_confidence,
+        ),
         audio=AudioConfig(enabled=args.audio),
     )
 
@@ -140,6 +145,9 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run MOBI tabletop robot MVP.")
     parser.add_argument("--mock", action="store_true", help="Run without real GPIO/I2C/camera hardware.")
     parser.add_argument("--camera-index", type=int, default=0, help="OpenCV camera index.")
+    parser.add_argument("--vision-backend", default="haar", choices=("haar", "yolo"), help="Camera detector backend.")
+    parser.add_argument("--yolo-model", default="yolov8n.pt", help="YOLO model path or name.")
+    parser.add_argument("--yolo-confidence", type=float, default=0.45, help="YOLO confidence threshold.")
     parser.add_argument("--audio", action="store_true", help="Enable pyttsx3 text-to-speech.")
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     return parser.parse_args()
