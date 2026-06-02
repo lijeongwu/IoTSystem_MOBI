@@ -4,19 +4,6 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
-class VisionConfig:
-    camera_index: int = 0
-    width: int = 320
-    height: int = 240
-    detect_every_n_frames: int = 2
-    lost_after_s: float = 1.5
-    backend: str = "haar"
-    yolo_model: str = "yolov8n.pt"
-    yolo_confidence: float = 0.45
-    yolo_target_classes: tuple[str, ...] = ("person", "face")
-
-
-@dataclass(frozen=True)
 class DisplayConfig:
     width: int = 800
     height: int = 480
@@ -25,15 +12,19 @@ class DisplayConfig:
 
 
 @dataclass(frozen=True)
-class TouchConfig:
-    pins: tuple[int, int, int, int] = (17, 27, 22, 23)
-    active_high: bool = True
+class CameraConfig:
+    width: int = 640
+    height: int = 360
+    detect_every_n_frames: int = 2
+    face_hold_s: float = 0.8
+    min_detection_confidence: float = 0.55
+    mock_motion: bool = False
 
 
 @dataclass(frozen=True)
-class ImuConfig:
+class MpuConfig:
     shake_threshold_g: float = 1.65
-    cooldown_s: float = 1.2
+    cooldown_s: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -59,11 +50,19 @@ class LlmConfig:
 
 
 @dataclass(frozen=True)
+class BehaviorConfig:
+    sleepy_after_s: float = 20.0
+    happy_duration_s: float = 1.4
+    dizzy_duration_s: float = 2.0
+    surprised_duration_s: float = 1.0
+
+
+@dataclass(frozen=True)
 class RobotConfig:
     mock: bool = False
-    vision: VisionConfig = field(default_factory=VisionConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
-    touch: TouchConfig = field(default_factory=TouchConfig)
-    imu: ImuConfig = field(default_factory=ImuConfig)
+    camera: CameraConfig = field(default_factory=CameraConfig)
+    mpu: MpuConfig = field(default_factory=MpuConfig)
+    behavior: BehaviorConfig = field(default_factory=BehaviorConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
     llm: LlmConfig = field(default_factory=LlmConfig)
