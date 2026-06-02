@@ -194,8 +194,11 @@ python run_mobi.py --camera-index 1
 얼굴 인식 여부는 콘솔 로그로 확인할 수 있습니다.
 
 ```text
+camera opened with OpenCV index 0: OpenCV로 카메라 열림
+camera opened with Picamera2: Picamera2로 카메라 열림
 face detected: 얼굴을 처음 찾음
 face tracking: 얼굴 위치 추적 중
+no face/person detected: 감지 대상 없음
 face lost: 얼굴을 놓침
 ```
 
@@ -203,6 +206,12 @@ face lost: 얼굴을 놓침
 
 ```bash
 python run_mobi.py --log-level DEBUG
+```
+
+기본 실행은 Haar Cascade 얼굴 인식이라 정면 얼굴을 주로 찾습니다. 사람 전체를 기준으로 테스트하려면 YOLO를 사용하세요.
+
+```bash
+python run_mobi.py --vision-backend yolo
 ```
 
 ## 키보드 테스트

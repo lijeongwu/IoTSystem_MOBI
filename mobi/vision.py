@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 import math
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -23,6 +24,7 @@ class FaceDetection:
 
 class Vision:
     def __init__(self, config: VisionConfig, mock: bool = False):
+        self.logger = logging.getLogger("mobi.vision")
         self.config = config
         self.mock = mock
         self._frame_count = 0
@@ -30,6 +32,8 @@ class Vision:
         self._last_seen_at = 0.0
         self._cap = None
         self._picamera2 = None
+        self._camera_backend = "mock" if mock else "none"
+        self._read_failures = 0
         self._yolo = None
 
         self._face_cascade = None
@@ -68,12 +72,25 @@ class Vision:
         self._cap = cv2.VideoCapture(self.config.camera_index)
         self._cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.config.width)
         self._cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.config.height)
-        if self._cap.isOpened():
+        if self._cap.isOpened() and self._opencv_can_read_frame():
+            self._camera_backend = f"opencv:{self.config.camera_index}"
+            self.logger.info("camera opened with OpenCV index %s", self.config.camera_index)
             return
 
-        self._cap.release()
+        if self._cap is not None:
+            self._cap.release()
         self._cap = None
         self._setup_picamera2()
+
+    def _opencv_can_read_frame(self) -> bool:
+        if self._cap is None:
+            return False
+        for _ in range(3):
+            ok, frame = self._cap.read()
+            if ok and frame is not None:
+                return True
+        self.logger.warning("OpenCV camera index %s opened but did not return frames", self.config.camera_index)
+        return False
 
     def _setup_picamera2(self) -> None:
         try:
@@ -84,10 +101,13 @@ class Vision:
             camera.configure(config)
             camera.start()
             self._picamera2 = camera
+            self._camera_backend = "picamera2"
+            self.logger.info("camera opened with Picamera2")
         except Exception as exc:
             print(f"[vision] camera unavailable, using mock vision: {exc}")
             self.mock = True
             self._cap = None
+            self._camera_backend = "mock"
 
     def read(self) -> FaceDetection:
         if self.mock:
@@ -95,7 +115,11 @@ class Vision:
 
         frame = self._read_frame()
         if frame is None:
+            self._read_failures += 1
+            if self._read_failures == 1 or self._read_failures % 30 == 0:
+                self.logger.warning("camera frame unavailable from %s", self._camera_backend)
             return self._mark_lost_if_needed()
+        self._read_failures = 0
 
         frame = cv2.resize(frame, (self.config.width, self.config.height))
         self._frame_count += 1

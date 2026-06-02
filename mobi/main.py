@@ -50,6 +50,7 @@ class MobiApp:
         self._mood_until = 0.0
         self._last_face_seen = False
         self._last_tracking_log_at = 0.0
+        self._last_no_detection_log_at = 0.0
         self._looking_x = 0.0
 
     def run(self) -> None:
@@ -118,6 +119,9 @@ class MobiApp:
         if detection.seen and now - self._last_tracking_log_at > 1.0:
             self.logger.info("face tracking: x=%s y=%s", detection.x, detection.y)
             self._last_tracking_log_at = now
+        elif not detection.seen and now - self._last_no_detection_log_at > 2.0:
+            self.logger.info("no face/person detected; eyes stay in sleep state")
+            self._last_no_detection_log_at = now
 
         self._last_face_seen = detection.seen
 
