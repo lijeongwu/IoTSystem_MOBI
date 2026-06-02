@@ -16,7 +16,9 @@
 ```text
 MOBI/
   README.md
+  requirements-llm.txt
   requirements.txt
+  requirements-yolo.txt
   run_mobi.py
   mobi/
     __init__.py
@@ -24,10 +26,53 @@ MOBI/
     config.py
     face_ui.py
     imu.py
+    llm.py
     main.py
     motion.py
     touch.py
     vision.py
+```
+
+## 모듈 역할
+
+```text
+run_mobi.py
+- 프로그램 시작점
+
+mobi/main.py
+- 전체 실행 루프
+- 카메라, 서보, 화면, 터치, IMU, 오디오, LLM 연결
+
+mobi/config.py
+- 카메라 해상도, 서보 각도, GPIO 핀, 음성/LLM 설정값
+
+mobi/vision.py
+- RGB Camera
+- Haar Cascade 얼굴 인식
+- 선택적으로 YOLO 사람/얼굴 인식
+
+mobi/motion.py
+- PCA9685
+- SG-90 서보 좌우 회전
+
+mobi/face_ui.py
+- 5인치 HDMI LCD 표정 UI
+- idle, happy, dizzy, listen, speak, sleep 표정
+
+mobi/touch.py
+- TTP224 정전식 터치 센서
+
+mobi/imu.py
+- MPU6050 흔들림 감지
+
+mobi/audio.py
+- Microphone 음성 인식(STT)
+- Speaker 음성 출력(TTS)
+
+mobi/llm.py
+- LLM 챗봇 응답 생성
+- OPENAI_API_KEY가 있으면 OpenAI API 사용
+- API 키가 없으면 테스트용 fallback 응답
 ```
 
 ## 배선 요약
@@ -81,6 +126,19 @@ YOLO 인식을 사용할 경우:
 pip install -r requirements-yolo.txt
 ```
 
+LLM 대화 기능을 사용할 경우:
+
+```bash
+pip install -r requirements-llm.txt
+```
+
+마이크 입력에서 PyAudio 오류가 나면:
+
+```bash
+sudo apt install portaudio19-dev
+pip install PyAudio
+```
+
 I2C도 켜야 합니다.
 
 ```bash
@@ -115,6 +173,16 @@ python run_mobi.py --vision-backend yolo
 python run_mobi.py --vision-backend yolo --yolo-model models/face.pt
 ```
 
+마이크와 스피커로 LLM 대화를 사용할 때:
+
+```bash
+export OPENAI_API_KEY="YOUR_API_KEY"
+python run_mobi.py --audio --conversation
+```
+
+실행 중 `V` 키를 누르면 한 번 듣고, 답변을 생성한 뒤 스피커로 말합니다.
+현재 STT는 `SpeechRecognition`의 Google 음성 인식을 사용하므로 인터넷 연결이 필요합니다.
+
 카메라 번호가 다르면:
 
 ```bash
@@ -145,6 +213,7 @@ python run_mobi.py --log-level DEBUG
 3: dizzy
 4: listen
 5: speak
+V: 마이크로 한 번 듣고 LLM 답변 말하기
 Space: 정면으로 서보 복귀
 Esc / Q: 종료
 ```
@@ -157,4 +226,5 @@ Esc / Q: 종료
 4. 카메라 연결 후 얼굴 추적 확인
 5. TTP224 터치 반응 연결
 6. MPU6050 흔들림 반응 연결
-7. 음성 입출력 추가
+7. 음성 입출력 연결
+8. LLM 대화 기능 연결

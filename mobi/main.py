@@ -7,9 +7,10 @@ import time
 import pygame
 
 from .audio import AudioIO
-from .config import AudioConfig, RobotConfig, VisionConfig
+from .config import AudioConfig, LlmConfig, RobotConfig, VisionConfig
 from .face_ui import FaceState, FaceUI
 from .imu import ImuSensor
+from .llm import LlmClient
 from .motion import HeadServo
 from .touch import TouchSensor
 from .vision import Vision
@@ -24,7 +25,13 @@ def build_config(args: argparse.Namespace) -> RobotConfig:
             yolo_model=args.yolo_model,
             yolo_confidence=args.yolo_confidence,
         ),
-        audio=AudioConfig(enabled=args.audio),
+        audio=AudioConfig(
+            enabled=args.audio,
+            language=args.speech_language,
+            listen_timeout_s=args.listen_timeout,
+            phrase_time_limit_s=args.phrase_time_limit,
+        ),
+        llm=LlmConfig(enabled=args.conversation, model=args.llm_model),
     )
 
 
@@ -38,6 +45,7 @@ class MobiApp:
         self.touch = TouchSensor(config.touch, mock=config.mock)
         self.imu = ImuSensor(config.imu, mock=config.mock)
         self.audio = AudioIO(config.audio, mock=config.mock)
+        self.llm = LlmClient(config.llm, mock=config.mock)
 
         self.mood = "idle"
         self.message = "mock mode" if config.mock else "ready"
@@ -75,6 +83,8 @@ class MobiApp:
                 self._set_mood("listen", "listening")
             elif event.key == pygame.K_5:
                 self._set_mood("speak", "speaking", duration=1.5)
+            elif event.key == pygame.K_v:
+                self._run_conversation_turn()
             elif event.key == pygame.K_SPACE:
                 self.servo.center()
 
@@ -134,6 +144,39 @@ class MobiApp:
         self.message = message
         self._mood_until = time.monotonic() + duration if duration else 0.0
 
+    def _run_conversation_turn(self) -> None:
+        self.logger.info("conversation turn started")
+        self._set_mood("listen", "listening")
+        self._render_current_state()
+
+        user_text = self.audio.listen_once()
+        if not user_text:
+            self._set_mood("idle", "no speech", duration=1.0)
+            self.logger.info("conversation turn ended without speech")
+            return
+
+        self.logger.info("heard: %s", user_text)
+        self._set_mood("speak", "thinking")
+        self._render_current_state()
+
+        answer = self.llm.reply(user_text)
+        self.logger.info("reply: %s", answer)
+
+        self._set_mood("speak", "speaking", duration=1.0)
+        self._render_current_state()
+        self.audio.say(answer)
+
+    def _render_current_state(self) -> None:
+        self.ui.set_state(
+            FaceState(
+                mood=self.mood,
+                looking_x=0.0,
+                face_seen=self._last_face_seen,
+                message=self.message,
+            )
+        )
+        self.ui.tick()
+
     def _expire_temporary_mood(self) -> None:
         if self._mood_until and time.monotonic() > self._mood_until:
             self.mood = "idle"
@@ -149,6 +192,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--yolo-model", default="yolov8n.pt", help="YOLO model path or name.")
     parser.add_argument("--yolo-confidence", type=float, default=0.45, help="YOLO confidence threshold.")
     parser.add_argument("--audio", action="store_true", help="Enable pyttsx3 text-to-speech.")
+    parser.add_argument("--conversation", action="store_true", help="Enable one-turn LLM conversation on V key.")
+    parser.add_argument("--llm-model", default="gpt-4o-mini", help="OpenAI chat model name.")
+    parser.add_argument("--speech-language", default="ko-KR", help="Speech recognition language.")
+    parser.add_argument("--listen-timeout", type=float, default=5.0, help="Seconds to wait for speech.")
+    parser.add_argument("--phrase-time-limit", type=float, default=8.0, help="Maximum seconds per utterance.")
     parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"))
     return parser.parse_args()
 

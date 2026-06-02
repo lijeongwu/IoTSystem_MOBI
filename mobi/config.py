@@ -50,6 +50,23 @@ class ImuConfig:
 @dataclass(frozen=True)
 class AudioConfig:
     enabled: bool = False
+    language: str = "ko-KR"
+    listen_timeout_s: float = 5.0
+    phrase_time_limit_s: float = 8.0
+    ambient_duration_s: float = 0.4
+
+
+@dataclass(frozen=True)
+class LlmConfig:
+    enabled: bool = False
+    model: str = "gpt-4o-mini"
+    max_history_turns: int = 6
+    max_tokens: int = 180
+    temperature: float = 0.7
+    system_prompt: str = (
+        "너는 책상 위 반려로봇 모비야. "
+        "한국어로 짧고 다정하게 대답하고, 한 번에 2문장 이내로 말해."
+    )
 
 
 @dataclass(frozen=True)
@@ -61,3 +78,4 @@ class RobotConfig:
     touch: TouchConfig = field(default_factory=TouchConfig)
     imu: ImuConfig = field(default_factory=ImuConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
+    llm: LlmConfig = field(default_factory=LlmConfig)
