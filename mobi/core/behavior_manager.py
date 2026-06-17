@@ -5,6 +5,7 @@ import time
 from mobi.camera.camera_face_tracker import FaceTrackResult
 from mobi.config import BehaviorConfig
 from mobi.display.expressions import Expression, normalize_expression
+from mobi.sensors.touch_reader import TouchAction, TouchEvent
 
 
 class BehaviorManager:
@@ -77,6 +78,20 @@ class BehaviorManager:
 
     def trigger_surprised(self) -> None:
         self.trigger(Expression.SURPRISED, self.config.surprised_duration_s)
+
+    def trigger_gun_hit(self) -> None:
+        self.trigger(Expression.DEAD, self.config.gun_hit_duration_s)
+
+    def trigger_touch(self, event: TouchEvent, happy_duration_s: float, angry_duration_s: float) -> None:
+        expression_by_action = {
+            TouchAction.HEAD: Expression.HAPPY,
+            TouchAction.BACK: Expression.HAPPY,
+            TouchAction.LEFT_EAR: Expression.ANNOYED,
+            TouchAction.RIGHT_EAR: Expression.ANNOYED,
+        }
+        expression = expression_by_action[event.action]
+        duration_s = happy_duration_s if event.action in (TouchAction.HEAD, TouchAction.BACK) else angry_duration_s
+        self.trigger(expression, duration_s)
 
     def start_speaking(self) -> None:
         self._speaking = True

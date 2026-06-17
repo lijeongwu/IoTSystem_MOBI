@@ -33,13 +33,22 @@ class AudioIO:
             import speech_recognition as sr
 
             self._recognizer = sr.Recognizer()
-            self._microphone = sr.Microphone()
+            self._microphone = sr.Microphone(device_index=self.config.microphone_device_index)
             with self._microphone as source:
                 self._recognizer.adjust_for_ambient_noise(source, duration=self.config.ambient_duration_s)
         except Exception as exc:
             print(f"[audio] microphone/STT unavailable: {exc}")
             self._recognizer = None
             self._microphone = None
+
+    @staticmethod
+    def microphone_names() -> list[str]:
+        try:
+            import speech_recognition as sr
+
+            return list(sr.Microphone.list_microphone_names())
+        except Exception:
+            return []
 
     def say(self, text: str) -> None:
         if self.mock or self._engine is None:
