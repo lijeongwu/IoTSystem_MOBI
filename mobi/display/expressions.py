@@ -15,6 +15,7 @@ class Expression(str, Enum):
     HAPPY_BLISS = "happy_bliss"
     SAD = "sad"
     DEAD = "dead"
+    FEAR = "fear"
     ANNOYED = "annoyed"
     HURT = "hurt"
     SURPRISED = "surprised"
@@ -33,6 +34,7 @@ PRIORITY: dict[Expression, int] = {
     Expression.HAPPY_BLISS: 50,
     Expression.SAD: 50,
     Expression.DEAD: 95,
+    Expression.FEAR: 65,
     Expression.ANNOYED: 55,
     Expression.HURT: 55,
     Expression.SURPRISED: 45,

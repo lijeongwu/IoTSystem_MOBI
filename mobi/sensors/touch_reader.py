@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 
@@ -28,7 +29,7 @@ class TTP224TouchReader:
         self.mock = mock
         self._buttons = []
         self._button_by_action = {}
-        self._pending: list[TouchEvent] = []
+        self._pending: deque[TouchEvent] = deque()
         self._last_event_at: dict[TouchAction, float] = {}
 
         if mock:
@@ -62,7 +63,7 @@ class TTP224TouchReader:
     def read_event(self) -> TouchEvent | None:
         if self.mock or not self._pending:
             return None
-        return self._pending.pop(0)
+        return self._pending.popleft()
 
     def close(self) -> None:
         for button in self._buttons:

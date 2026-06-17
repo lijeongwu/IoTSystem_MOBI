@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from mobi.config import LiveConversationConfig, MOBI_SYSTEM_PROMPT
+from mobi.utils import load_env_file
 
 
 class LiveEventType(str, Enum):
@@ -29,22 +30,6 @@ class LiveEventType(str, Enum):
 class LiveEvent:
     type: LiveEventType
     text: str = ""
-
-
-def load_env_file(path: str | Path) -> None:
-    env_path = Path(path)
-    if not env_path.is_absolute():
-        env_path = Path.cwd() / env_path
-    if not env_path.exists():
-        return
-    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        if line.startswith("export "):
-            line = line[7:].strip()
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
 
 
 def is_allowed_speaker_name(name: str) -> bool:
@@ -76,10 +61,10 @@ def find_pipewire_playback_target() -> str | None:
         in_sinks = False
         for line in result.stdout.splitlines():
             stripped = line.strip()
-            if stripped.startswith("Sinks:"):
+            if stripped.endswith("Sinks:"):
                 in_sinks = True
                 continue
-            if in_sinks and stripped.endswith(":") and not stripped.startswith("Sinks:"):
+            if in_sinks and stripped.endswith(":") and not stripped.endswith("Sinks:"):
                 in_sinks = False
             if not in_sinks:
                 continue
@@ -111,6 +96,7 @@ class GeminiLiveController:
         self._speaking = threading.Event()
         self._events: queue.Queue[LiveEvent] = queue.Queue()
         self._say_queue: queue.Queue[str] = queue.Queue()
+        self._audio_file_queue: queue.Queue[str] = queue.Queue()
         self._suppress_output_until = 0.0
         self.last_activity_at = time.monotonic()
 
@@ -135,6 +121,7 @@ class GeminiLiveController:
         self.last_activity_at = time.monotonic()
         self._mic_muted.clear()
         self._speaking.clear()
+        self._suppress_output_until = 0.0
         while True:
             try:
                 self._events.get_nowait()
@@ -146,7 +133,7 @@ class GeminiLiveController:
         self._thread.start()
 
     def stop(self) -> None:
-        if self._loop is not None and self._stop_event is not None:
+        if self._loop is not None and self._stop_event is not None and not self._loop.is_closed():
             self._loop.call_soon_threadsafe(self._stop_event.set)
 
     def join(self, timeout: float = 2.0) -> None:
@@ -167,6 +154,16 @@ class GeminiLiveController:
     def say(self, text: str) -> None:
         if text:
             self._say_queue.put(text)
+
+    def play_audio_file(self, path: str | Path) -> None:
+        audio_path = Path(path)
+        if not audio_path.is_absolute():
+            audio_path = Path.cwd() / audio_path
+        if not audio_path.exists():
+            self._events.put(LiveEvent(LiveEventType.ERROR, f"audio file not found: {audio_path}"))
+            return
+        self._audio_file_queue.put(str(audio_path))
+        self.mark_activity()
 
     def drain_events(self) -> list[LiveEvent]:
         events: list[LiveEvent] = []
@@ -222,7 +219,7 @@ class GeminiLiveController:
                     end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
                     silence_duration_ms=self.config.silence_ms,
                 ),
-                activity_handling=types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS,
+                activity_handling=types.ActivityHandling.NO_INTERRUPTION,
                 turn_coverage=types.TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
             ),
         )
@@ -241,7 +238,13 @@ class GeminiLiveController:
                     while self._stop_event is not None and not self._stop_event.is_set():
                         chunk = await arecord.stdout.read(chunk_size)
                         if not chunk:
-                            break
+                            if self._stop_event is not None and not self._stop_event.is_set():
+                                stderr = b""
+                                if arecord.stderr is not None:
+                                    stderr = await arecord.stderr.read()
+                                message = stderr.decode(errors="replace").strip()
+                                raise RuntimeError(message or "arecord stopped unexpectedly")
+                            return
                         if self._mic_muted.is_set() or self._speaking.is_set():
                             continue
                         await session.send_realtime_input(audio=types.Blob(data=chunk, mime_type="audio/pcm"))
@@ -262,6 +265,26 @@ class GeminiLiveController:
                         turn_complete=True,
                     )
 
+            async def play_audio_files() -> None:
+                while self._stop_event is not None and not self._stop_event.is_set():
+                    try:
+                        path = await asyncio.to_thread(self._audio_file_queue.get, True, 0.1)
+                    except queue.Empty:
+                        continue
+                    self._speaking.set()
+                    self._emit(LiveEventType.SPEAKING_STARTED)
+                    try:
+                        file_player = await self._start_file_player(play_target, path)
+                        try:
+                            await asyncio.wait_for(file_player.wait(), timeout=8.0)
+                        except asyncio.TimeoutError:
+                            self.logger.warning("audio file playback did not exit cleanly; killing")
+                            file_player.kill()
+                            await file_player.wait()
+                    finally:
+                        self._speaking.clear()
+                        self._emit(LiveEventType.SPEAKING_ENDED)
+
             async def receive_and_play() -> None:
                 nonlocal player
                 while self._stop_event is not None and not self._stop_event.is_set():
@@ -277,9 +300,7 @@ class GeminiLiveController:
                             text = server_content.output_transcription.text or ""
                             if text:
                                 self._emit(LiveEventType.OUTPUT_TEXT, text)
-                        if message.data:
-                            if time.monotonic() < self._suppress_output_until:
-                                continue
+                        if message.data and time.monotonic() >= self._suppress_output_until:
                             if not self._speaking.is_set():
                                 self._speaking.set()
                                 self._emit(LiveEventType.SPEAKING_STARTED)
@@ -291,7 +312,12 @@ class GeminiLiveController:
                         if server_content and server_content.turn_complete:
                             if player and player.stdin:
                                 player.stdin.close()
-                                await player.wait()
+                                try:
+                                    await asyncio.wait_for(player.wait(), timeout=5.0)
+                                except asyncio.TimeoutError:
+                                    self.logger.warning("pw-play did not exit cleanly; killing")
+                                    player.kill()
+                                    await player.wait()
                                 player = None
                             if self._speaking.is_set():
                                 self._speaking.clear()
@@ -301,6 +327,7 @@ class GeminiLiveController:
             tasks = [
                 asyncio.create_task(send_mic()),
                 asyncio.create_task(send_text_commands()),
+                asyncio.create_task(play_audio_files()),
                 asyncio.create_task(receive_and_play()),
                 asyncio.create_task(self._stop_event.wait()),
             ]
@@ -373,6 +400,18 @@ class GeminiLiveController:
         if process.stdin is None:
             raise RuntimeError("pw-play stdin을 열지 못했습니다.")
         return process
+
+    async def _start_file_player(self, target: str | None, path: str) -> asyncio.subprocess.Process:
+        if shutil.which("pw-play") is None:
+            raise RuntimeError("pw-play 명령을 찾지 못했습니다.")
+        command = ["pw-play"]
+        if target:
+            command.extend(["--target", target])
+        command.append(path)
+        return await asyncio.create_subprocess_exec(
+            *command,
+            stderr=asyncio.subprocess.PIPE,
+        )
 
     async def _stop_process(self, process: asyncio.subprocess.Process) -> None:
         if process.returncode is not None:

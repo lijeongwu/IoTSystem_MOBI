@@ -26,7 +26,7 @@ class AudioIO:
 
             self._engine = pyttsx3.init()
         except Exception as exc:
-            print(f"[audio] TTS unavailable: {exc}")
+            self.logger.warning("TTS unavailable: %s", exc)
 
     def _setup_stt(self) -> None:
         try:
@@ -37,7 +37,7 @@ class AudioIO:
             with self._microphone as source:
                 self._recognizer.adjust_for_ambient_noise(source, duration=self.config.ambient_duration_s)
         except Exception as exc:
-            print(f"[audio] microphone/STT unavailable: {exc}")
+            self.logger.warning("microphone/STT unavailable: %s", exc)
             self._recognizer = None
             self._microphone = None
 

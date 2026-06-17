@@ -17,5 +17,6 @@ __pycache__/
 
 tmp/
 *.wav
+!assets/audio/*.wav
 .evc
 .evv

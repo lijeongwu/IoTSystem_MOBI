@@ -20,7 +20,7 @@ from google import genai
 from google.genai import types
 
 from mobi.config import MOBI_SYSTEM_PROMPT
-from scripts.test_gemini_live import load_env_file
+from mobi.utils import load_env_file
 from scripts.test_voice_chat import find_first_capture_device, find_pipewire_playback_target, listen_with_arecord
 
 
@@ -242,7 +242,7 @@ async def run_loop(args: argparse.Namespace) -> None:
                 end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
                 silence_duration_ms=args.silence_ms,
             ),
-            activity_handling=types.ActivityHandling.NO_INTERRUPTION,
+            activity_handling=types.ActivityHandling.START_OF_ACTIVITY_INTERRUPTS,
             turn_coverage=types.TurnCoverage.TURN_INCLUDES_ONLY_ACTIVITY,
         ),
     )

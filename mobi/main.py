@@ -35,6 +35,7 @@ class MobiApp:
         self._palm_seen_at: list[float] = []
         self._wake_block_until = 0.0
         self._space_handled_at = 0.0
+        self._dizzy_audio_until = 0.0
         self._gun_aim_until = 0.0
         self._gun_hit_until = 0.0
         self._manual_gaze_mode = False
@@ -71,9 +72,13 @@ class MobiApp:
                     self._go_to_sleep()
                     continue
 
+                if shake and now >= self._dizzy_audio_until:
+                    self._dizzy_audio_until = now + self.config.behavior.dizzy_duration_s
+                    self.live.play_audio_file(self.config.live.dizzy_audio)
+
                 if not self.rps.active and hand_gesture == HandGesture.GUN:
                     self._gun_aim_until = now + 3.0
-                    self.behavior.trigger(Expression.DIZZY, 0.35)
+                    self.behavior.trigger(Expression.FEAR, 0.45)
 
                 if self.rps.active and hand_gesture == HandGesture.GUN:
                     hand_gesture = HandGesture.SCISSORS
@@ -99,8 +104,8 @@ class MobiApp:
                     rps_state = self.rps.update(hand_gesture)
                     if rps_state.active:
                         self.live.mute_mic(True)
-                        if rps_state.speech_text:
-                            self.live.say(rps_state.speech_text)
+                        if rps_state.audio_cue:
+                            self._play_rps_audio_cue(rps_state.audio_cue)
                         expression = rps_state.expression or Expression.THINKING
                         gaze_x = self.behavior.gaze_x
                         gaze_y = self.behavior.gaze_y
@@ -168,6 +173,10 @@ class MobiApp:
                     self.behavior.set_expression(expression)
                 continue
 
+            if event.key == pygame.K_f:
+                self.behavior.trigger(Expression.FEAR, 1.2)
+                continue
+
             if event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
                 self._manual_gaze_mode = True
                 gx = self.behavior.gaze_x
@@ -215,10 +224,11 @@ class MobiApp:
         self._sleeping = False
         self._wake_touch_started_at = None
         self._palm_seen_at.clear()
-        self.behavior.set_expression(Expression.IDLE)
+        self.behavior.reset_idle_timer()
         self.face.set_expression(Expression.LOOK if face_result.seen else Expression.IDLE)
         self.face.set_gaze(face_result.gaze_x if face_result.seen else 0.0, face_result.gaze_y if face_result.seen else 0.0)
-        self.live.start(self.config.live.intro_text)
+        self.live.start()
+        self.live.play_audio_file(self.config.live.wake_audio)
 
     def _go_to_sleep(self) -> None:
         if self._sleeping:
@@ -229,6 +239,7 @@ class MobiApp:
         self.rps = RpsGame()
         self._gun_aim_until = 0.0
         self._gun_hit_until = 0.0
+        self._dizzy_audio_until = 0.0
         self.live.stop()
         self.live.join(timeout=1.0)
         self.live.mute_mic(False)
@@ -253,13 +264,32 @@ class MobiApp:
                     self.live.suppress_output(1.2)
                     self.rps.start()
                     self.live.mute_mic(True)
-                if ("빵" in text or "탕" in text) and now <= self._gun_aim_until and not self._sleeping:
+                if self._is_bang(event.text) and now <= self._gun_aim_until and not self._sleeping:
                     self.logger.info("bang/tang detected after gun gesture; playing dead")
+                    hit_duration = self.config.behavior.gun_hit_duration_s
                     self.live.suppress_output(1.0)
                     self._gun_aim_until = 0.0
-                    self._gun_hit_until = now + 2.0
-                    self.behavior.trigger(Expression.DEAD, 2.0)
+                    self._gun_hit_until = now + hit_duration
+                    self.behavior.trigger(Expression.DEAD, hit_duration)
                     self.tail.droop()
+
+    def _play_rps_audio_cue(self, cue: str) -> None:
+        audio_by_cue = {
+            "countdown": self.config.live.rps_countdown_audio,
+            "win": self.config.live.rps_win_audio,
+            "again": self.config.live.rps_again_audio,
+            "lose": self.config.live.rps_lose_audio,
+        }
+        path = audio_by_cue.get(cue)
+        if path:
+            self.live.play_audio_file(path)
+
+    @staticmethod
+    def _is_bang(text: str) -> bool:
+        for word in text.split():
+            if word.strip(".,!?~…") in ("빵", "탕"):
+                return True
+        return False
 
     def _dispatch_expression_triggers(self, expression: Expression, face_result: FaceTrackResult) -> None:
         if expression == Expression.LOOK and face_result.seen:
@@ -274,7 +304,7 @@ class MobiApp:
             self.face.start_speaking()
         elif expression == Expression.HAPPY:
             self.face.trigger_touch_happy()
-        elif expression in (Expression.HAPPY_PET, Expression.HAPPY_BLISS, Expression.ANNOYED, Expression.HURT, Expression.SAD):
+        elif expression in (Expression.HAPPY_PET, Expression.HAPPY_BLISS, Expression.ANNOYED, Expression.HURT, Expression.SAD, Expression.FEAR):
             self.face.set_expression(expression)
         elif expression == Expression.DEAD:
             self.face.trigger_gun_hit()

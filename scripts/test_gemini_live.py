@@ -17,20 +17,8 @@ from google import genai
 from google.genai import types
 
 from mobi.config import MOBI_SYSTEM_PROMPT
+from mobi.utils import load_env_file
 from scripts.test_voice_chat import find_first_capture_device, play_wav
-
-
-def load_env_file(path: Path) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        if line.startswith("export "):
-            line = line[7:].strip()
-        key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
 
 
 def parse_args() -> argparse.Namespace:

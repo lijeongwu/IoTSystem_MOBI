@@ -119,13 +119,19 @@ class LiveConversationConfig:
     silence_ms: int = 650
     sleep_after_s: float = 10.0
     intro_text: str = "오랜만이야 주인"
+    wake_audio: str = "assets/audio/wake_intro.wav"
+    rps_countdown_audio: str = "assets/audio/rps_countdown.wav"
+    dizzy_audio: str = "assets/audio/dizzy_uaa.wav"
+    rps_win_audio: str = "assets/audio/rps_win.wav"
+    rps_again_audio: str = "assets/audio/rps_again.wav"
+    rps_lose_audio: str = "assets/audio/rps_lose.wav"
 
 
 @dataclass(frozen=True)
 class BehaviorConfig:
     sleepy_after_s: float = 20.0
     happy_duration_s: float = 1.4
-    gun_hit_duration_s: float = 5.0
+    gun_hit_duration_s: float = 2.0
     dizzy_duration_s: float = 2.0
     surprised_duration_s: float = 1.0
 

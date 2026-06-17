@@ -43,10 +43,6 @@ class BehaviorManager:
             self.gaze_x = face.gaze_x
             self.gaze_y = face.gaze_y
             self.expression = Expression.LOOK
-        elif now - self._last_face_seen_at > self.config.sleepy_after_s:
-            self.gaze_x = 0.0
-            self.gaze_y = 0.0
-            self.expression = Expression.SLEEPY
         else:
             self.gaze_x = 0.0
             self.gaze_y = 0.0
@@ -67,6 +63,13 @@ class BehaviorManager:
         self.gaze_x = max(-1.0, min(1.0, x))
         self.gaze_y = max(-1.0, min(1.0, y))
 
+    def reset_idle_timer(self) -> None:
+        self._last_face_seen_at = time.monotonic()
+        self._temporary_expression = None
+        self._manual_expression = None
+        self._speaking = False
+        self.expression = Expression.IDLE
+
     def trigger(self, expression: str | Expression, duration_s: float) -> None:
         self._temporary_expression = normalize_expression(expression)
         self._temporary_until = time.monotonic() + duration_s
@@ -78,9 +81,6 @@ class BehaviorManager:
 
     def trigger_surprised(self) -> None:
         self.trigger(Expression.SURPRISED, self.config.surprised_duration_s)
-
-    def trigger_gun_hit(self) -> None:
-        self.trigger(Expression.DEAD, self.config.gun_hit_duration_s)
 
     def trigger_touch(self, event: TouchEvent, happy_duration_s: float, angry_duration_s: float) -> None:
         expression_by_action = {

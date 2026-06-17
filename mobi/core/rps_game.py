@@ -21,7 +21,7 @@ class RpsFrame:
     active: bool
     expression: Expression | None = None
     overlay_text: str | None = None
-    speech_text: str | None = None
+    audio_cue: str | None = None
 
 
 class RpsGame:
@@ -32,7 +32,7 @@ class RpsGame:
         self._mobi_choice: RpsChoice | None = None
         self._result_text = ""
         self._expression: Expression | None = None
-        self._last_chant_index = -1
+        self._pending_audio_cue: str | None = None
 
     def update(self, gesture: HandGesture) -> RpsFrame:
         now = time.monotonic()
@@ -47,21 +47,16 @@ class RpsGame:
             if elapsed >= 3.0:
                 self._finish_round(now)
                 return self._result_frame()
-            chant_index = min(2, int(elapsed))
-            speech_text = None
-            if chant_index != self._last_chant_index:
-                self._last_chant_index = chant_index
-                speech_text = ("가위", "바위", "보")[chant_index]
             return RpsFrame(
                 active=True,
                 expression=Expression.SURPRISED,
                 overlay_text=str(max(1, 3 - int(elapsed))),
-                speech_text=speech_text,
+                audio_cue=self._pop_audio_cue(),
             )
 
         if self._state == "result":
             if now - self._state_started_at >= 1.6:
-                if self._result_text == "DRAW":
+                if self._result_text in ("DRAW", "AGAIN"):
                     self._start_countdown(now)
                     return self.update(gesture)
                 self._reset()
@@ -84,7 +79,7 @@ class RpsGame:
         self._mobi_choice = None
         self._result_text = ""
         self._expression = Expression.SURPRISED
-        self._last_chant_index = -1
+        self._pending_audio_cue = "countdown"
 
     def _finish_round(self, now: float) -> None:
         user_choice = self._stable_user_choice()
@@ -94,6 +89,7 @@ class RpsGame:
             self._mobi_choice = None
             self._result_text = "AGAIN"
             self._expression = Expression.SURPRISED
+            self._pending_audio_cue = "again"
             return
 
         self._mobi_choice = random.choice(list(RpsChoice))
@@ -104,12 +100,15 @@ class RpsGame:
         if outcome == "win":
             self._result_text = "WIN"
             self._expression = Expression.HAPPY
+            self._pending_audio_cue = "win"
         elif outcome == "lose":
             self._result_text = "LOSE"
             self._expression = Expression.SAD
+            self._pending_audio_cue = "lose"
         else:
             self._result_text = "DRAW"
             self._expression = Expression.SURPRISED
+            self._pending_audio_cue = "again"
 
     def _stable_user_choice(self) -> RpsChoice | None:
         valid = [
@@ -149,6 +148,7 @@ class RpsGame:
             active=True,
             expression=self._expression,
             overlay_text=overlay,
+            audio_cue=self._pop_audio_cue(),
         )
 
     def _label(self, choice: RpsChoice) -> str:
@@ -165,4 +165,9 @@ class RpsGame:
         self._mobi_choice = None
         self._result_text = ""
         self._expression = None
-        self._last_chant_index = -1
+        self._pending_audio_cue = None
+
+    def _pop_audio_cue(self) -> str | None:
+        cue = self._pending_audio_cue
+        self._pending_audio_cue = None
+        return cue

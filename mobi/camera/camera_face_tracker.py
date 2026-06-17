@@ -201,7 +201,7 @@ class CameraFaceTracker:
         pinky = extended["pinky"]
         non_thumb_count = sum((index, middle, ring, pinky))
 
-        if thumb and index and not middle and not ring and not pinky and self._looks_like_finger_gun(landmarks):
+        if index and not middle and not ring and not pinky and self._looks_like_finger_gun(landmarks):
             return HandGesture.GUN
         if non_thumb_count <= 1:
             return HandGesture.ROCK
@@ -252,11 +252,11 @@ class CameraFaceTracker:
         index_len = self._vector_length(index_vec)
         thumb_len = self._vector_length(thumb_vec)
         palm_width = max(0.001, self._landmark_distance(index_mcp, pinky_mcp))
-        if index_len < palm_width * 0.72 or thumb_len < palm_width * 0.45:
+        if index_len < palm_width * 0.62 or thumb_len < palm_width * 0.32:
             return False
 
         angle = self._angle_between(index_vec, thumb_vec)
-        if not 45.0 <= angle <= 125.0:
+        if not 35.0 <= angle <= 145.0:
             return False
 
         folded_tips = (middle_tip, ring_tip, pinky_tip)
@@ -269,12 +269,12 @@ class CameraFaceTracker:
             return False
 
         thumb_index_gap = self._landmark_distance(thumb_tip, index_tip)
-        if thumb_index_gap < palm_width * 0.45:
+        if thumb_index_gap < palm_width * 0.28:
             return False
 
         palm_height = max(0.001, self._landmark_distance(wrist, middle_mcp))
         palm_aspect = palm_width / palm_height
-        if palm_aspect > 1.75:
+        if palm_aspect > 2.35:
             return False
 
         return True

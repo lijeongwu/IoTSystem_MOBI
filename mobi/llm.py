@@ -6,6 +6,7 @@ import wave
 from pathlib import Path
 
 from .config import LlmConfig
+from .utils import load_env_file as _load_env_file_util
 
 
 class LlmClient:
@@ -28,23 +29,7 @@ class LlmClient:
             self._setup()
 
     def _load_env_file(self, env_file: str) -> None:
-        path = Path(env_file)
-        if not path.is_absolute():
-            path = Path.cwd() / path
-        if not path.exists():
-            return
-
-        for raw_line in path.read_text(encoding="utf-8").splitlines():
-            line = raw_line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            if line.startswith("export "):
-                line = line[7:].strip()
-            key, value = line.split("=", 1)
-            key = key.strip()
-            value = value.strip().strip("\"'")
-            if key:
-                os.environ.setdefault(key, value)
+        _load_env_file_util(env_file)
 
         self._provider = self._env("MOBI_LLM_PROVIDER", self._provider).lower()
         self._model = self._env("MOBI_GEMINI_MODEL", self._model)

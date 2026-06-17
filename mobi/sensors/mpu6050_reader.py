@@ -34,7 +34,11 @@ class MPU6050Reader:
         if self.mock or self._sensor is None:
             return False
 
-        ax, ay, az = self._sensor.acceleration
+        try:
+            ax, ay, az = self._sensor.acceleration
+        except OSError as exc:
+            self.logger.warning("MPU6050 read failed; shake ignored: %s", exc)
+            return False
         g_force = math.sqrt(ax * ax + ay * ay + az * az) / 9.80665
         now = time.monotonic()
 
@@ -46,4 +50,3 @@ class MPU6050Reader:
         self._last_shake_at = now
         self.logger.info("shake detected: %.2fg", g_force)
         return True
-

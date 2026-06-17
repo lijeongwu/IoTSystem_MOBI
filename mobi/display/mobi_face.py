@@ -27,6 +27,8 @@ class MobiFace:
         self.screen = pygame.display.set_mode((config.width, config.height), flags)
         pygame.display.set_caption("MOBI")
         self.clock = pygame.time.Clock()
+        self._font_overlay_large = pygame.font.Font(None, 112)
+        self._font_overlay_small = pygame.font.Font(None, 42)
 
     @property
     def closed(self) -> bool:
@@ -150,7 +152,7 @@ class MobiFace:
         base_h = 112
         if expression in (Expression.HAPPY, Expression.HAPPY_PET, Expression.HAPPY_BLISS):
             base_h = 106
-        if expression == Expression.SURPRISED:
+        if expression in (Expression.SURPRISED, Expression.FEAR):
             base_h = 124
         if expression in (Expression.ANNOYED, Expression.HURT):
             base_h = 82
@@ -158,7 +160,11 @@ class MobiFace:
             base_h = 116
 
         eye_h = max(int(base_h * 0.74), int(base_h * (1.0 - blink * 0.36)))
-        eye_w = 76 if expression != Expression.SURPRISED else 86
+        eye_w = 76
+        if expression == Expression.SURPRISED:
+            eye_w = 86
+        elif expression == Expression.FEAR:
+            eye_w = 96
         socket = pygame.Rect(0, 0, eye_w + 24, eye_h + 18)
         socket.center = (x, y)
         lens = pygame.Rect(0, 0, eye_w, eye_h)
@@ -179,14 +185,19 @@ class MobiFace:
             px += 4 if x < self.config.width // 2 else -4
         elif expression == Expression.HURT:
             py += 5
+        elif expression == Expression.FEAR:
+            px += int(math.sin(t * 28.0 + x * 0.02) * 5)
+            py += int(math.cos(t * 31.0 + x * 0.02) * 5)
 
         glow = pygame.Rect(0, 0, int(eye_w * 0.72), int(eye_h * 0.86))
         glow.center = (px + 4, py + 12)
-        pygame.draw.ellipse(self.screen, (26, 132, 156), glow)
+        glow_color = (26, 132, 156) if expression != Expression.FEAR else (94, 126, 170)
+        pygame.draw.ellipse(self.screen, glow_color, glow)
 
         iris = pygame.Rect(0, 0, int(eye_w * 0.54), int(eye_h * 0.82))
         iris.center = (px, py + 4)
-        pygame.draw.ellipse(self.screen, (38, 162, 186), iris)
+        iris_color = (38, 162, 186) if expression != Expression.FEAR else (124, 154, 204)
+        pygame.draw.ellipse(self.screen, iris_color, iris)
 
         pupil = pygame.Rect(0, 0, int(eye_w * 0.42), int(eye_h * 0.78))
         pupil.center = (px - 4, py - 2)
@@ -259,6 +270,11 @@ class MobiFace:
             pygame.draw.arc(self.screen, (104, 76, 54), (x - 62, y - 4, 124, 54), 0.16, math.pi - 0.16, 7)
         elif expression == Expression.DEAD:
             pygame.draw.line(self.screen, (64, 52, 42), (x - 50, y + 4), (x + 50, y + 4), 8)
+        elif expression == Expression.FEAR:
+            shake = int(math.sin(t * 36.0) * 4)
+            pygame.draw.ellipse(self.screen, (64, 52, 42), (x - 32 + shake, y - 20, 64, 72), 7)
+            pygame.draw.arc(self.screen, (110, 134, 182), (x - 126, y - 92, 34, 58), -0.5, 2.4, 5)
+            pygame.draw.arc(self.screen, (110, 134, 182), (x + 92, y - 92, 34, 58), 0.7, 3.6, 5)
         elif expression == Expression.DIZZY:
             points = []
             for i in range(13):
@@ -284,8 +300,8 @@ class MobiFace:
             pygame.draw.line(self.screen, color, (x - 48, y), (x + 48, y), 6)
 
     def _draw_overlay(self, text: str) -> None:
-        size = 92 if text in ("3", "2", "1") else 34
-        font = pygame.font.SysFont("arial", size, bold=True)
+        large = text in ("3", "2", "1")
+        font = self._font_overlay_large if large else self._font_overlay_small
         surface = font.render(text, True, (64, 52, 42))
-        rect = surface.get_rect(center=(self.config.width // 2, 54 if size < 80 else self.config.height // 2))
+        rect = surface.get_rect(center=(self.config.width // 2, self.config.height // 2 if large else 54))
         self.screen.blit(surface, rect)

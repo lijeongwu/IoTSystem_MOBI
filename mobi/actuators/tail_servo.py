@@ -18,9 +18,6 @@ class TailServo:
             self.logger.info("tail servo running in mock mode")
             return
 
-    def _setup_servo(self) -> None:
-        if self._servo is not None:
-            return
         try:
             from gpiozero import AngularServo
 
@@ -52,7 +49,6 @@ class TailServo:
     def set_angle(self, angle: float) -> None:
         if self.mock:
             return
-        self._setup_servo()
         if self._servo is None:
             return
         angle = max(0.0, min(180.0, angle))
